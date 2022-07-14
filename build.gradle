@@ -1,0 +1,41 @@
+plugins {
+	id 'groovy-gradle-plugin'
+	id 'maven-publish'
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'com.google.code.gson:gson:2.9.0'
+}
+
+group 'io.github.fourmisain'
+version '0.0.2'
+
+gradlePlugin {
+	plugins {
+		glue {
+			id = 'glue'
+			implementationClass = 'io.github.fourmisain.glue.GluePlugin'
+		}
+	}
+}
+
+publishing {
+	repositories {
+		if (project.properties.containsKey('gitLabDeployToken')) {
+			maven {
+				url "https://gitlab.com/api/v4/projects/37712942/packages/maven"
+				credentials(HttpHeaderCredentials) {
+					name = 'Deploy-Token'
+					value = gitLabDeployToken
+				}
+				authentication {
+					header(HttpHeaderAuthentication)
+				}
+			}
+		}
+	}
+}
