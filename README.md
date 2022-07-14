@@ -24,7 +24,7 @@ glue {
 
 ```
 plugins {
-    id 'glue' version '0.0.2'
+    id 'glue' version '0.0.3'
 }
 ```
 
