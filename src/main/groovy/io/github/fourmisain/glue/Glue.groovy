@@ -11,9 +11,9 @@ import java.util.zip.ZipOutputStream
 class Glue {
 	class ModData {
 		Map<String, byte[]> jar = [:]
-		Map<String, String> modJson = [:]
-		Map<String, String> refmap = [:]
-		Map<String, String> mixin = [:]
+		Map<String, Object> modJson = [:]
+		Map<String, Object> refmap = [:]
+		Map<String, Map<String, Object>> mixinConfigs = [:]
 
 		protected ModData() {}
 		protected ModData(String subproject) {
@@ -21,19 +21,32 @@ class Glue {
 				this.jar = readJarMap(inputFile(subproject))
 				this.modJson = Glue.fromJson(jar.get("fabric.mod.json"))
 				this.refmap  = Glue.fromJson(jar.get(refmapName()))
-				this.mixin   = Glue.fromJson(jar.get(mixinConfigName()))
+
+				for (String mixinName : this.modJson.get('mixins') ? []) {
+					this.mixinConfigs.put(mixinName, Glue.fromJson(jar.get(mixinName)))
+				}
 			}
 		}
 
 		void merge(ModData other) {
-			mergeInto(jar, other.jar, true)
-			mergeInto(modJson, other.modJson, true)
-			mergeInto(refmap, other.refmap, true)
-			mergeInto(mixin, other.mixin, true)
+			mergeInto(this.jar, other.jar, true)
+			mergeInto(this.modJson, other.modJson, true)
+			mergeInto(this.refmap, other.refmap, true)
 
-			jar.put("fabric.mod.json", Glue.toJson(modJson))
-			jar.put(refmapName(),      Glue.toJson(refmap))
-			jar.put(mixinConfigName(), Glue.toJson(mixin))
+			// update jar contents
+			this.jar.put("fabric.mod.json", Glue.toJson(this.modJson))
+			this.jar.put(refmapName(), Glue.toJson(this.refmap))
+
+			other.mixinConfigs.each { otherMixinName, otherMixinConfig -> {
+				// add or merge other mixin config
+				def newMixinConfig = mixinConfigs.merge(otherMixinName, otherMixinConfig, (mixinName, mixinConfig) -> {
+					mergeInto(mixinConfig, otherMixinConfig, true)
+					return mixinConfig
+				})
+
+				// update jar contents
+				this.jar.put(otherMixinName, Glue.toJson(newMixinConfig))
+			}}
 		}
 	}
 
@@ -107,10 +120,6 @@ class Glue {
 		return project.archives_base_name + '-refmap.json'
 	}
 
-	String mixinConfigName() {
-		return project.archives_base_name.toLowerCase() + '.mixins.json'
-	}
-
 	File outputPath() {
 		return project.file('build/libs')
 	}
@@ -121,17 +130,17 @@ class Glue {
 
 	private boolean valuesChanged(Object key, Object v1, Object v2) {
 		// ignore these as we'll merge them afterwards
-		if (key.equals("fabric.mod.json") || key.equals(refmapName()) || key.equals(mixinConfigName()))
+		if (key == "fabric.mod.json" || key == refmapName()) // TODO ignore mixin configs
 			return false;
 
 		// ignore since it should never matter
-		if (key.equals("META-INF/MANIFEST.MF"))
+		if (key == "META-INF/MANIFEST.MF")
 			return false;
 
 		if (v1 instanceof byte[] && v2 instanceof byte[])
 			return !Arrays.equals(v1, v2)
 
-		return !v1.equals(v2);
+		return v1 != v2;
 	}
 
 	void mergeInto(Map target, Map source, boolean logging = false) {
@@ -165,13 +174,13 @@ class Glue {
 		})
 	}
 
-	static Map<String, String> fromJson(byte[] data) {
+	static Map<String, Object> fromJson(byte[] data) {
 		if (data == null) return [:]
 		def str = new String(data, StandardCharsets.UTF_8)
-		return GSON.fromJson(str, Map.class)
+		return GSON.fromJson(str, Map<String, Object>.class)
 	}
 
-	static byte[] toJson(Map<String, String> json) {
+	static byte[] toJson(Map<String, Object> json) {
 		return GSON.toJson(json).getBytes(StandardCharsets.UTF_8)
 	}
 }
