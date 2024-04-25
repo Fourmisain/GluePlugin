@@ -11,7 +11,7 @@ These 3 files are instead combined as a type of map/object, where existing value
 
 ```
 plugins {
-    id 'glue' version '0.0.4'
+    id 'glue' version '0.0.5'
 }
 ```
 

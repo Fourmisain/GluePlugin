@@ -22,7 +22,7 @@ class Glue {
 				this.modJson = Glue.fromJson(jar.get("fabric.mod.json"))
 				this.refmap  = Glue.fromJson(jar.get(refmapName()))
 
-				for (String mixinName : this.modJson.get('mixins') ? []) {
+				for (String mixinName : this.modJson.get('mixins') ?: []) {
 					this.mixinConfigs.put(mixinName, Glue.fromJson(jar.get(mixinName)))
 				}
 			}
@@ -39,9 +39,9 @@ class Glue {
 
 			other.mixinConfigs.each { otherMixinName, otherMixinConfig -> {
 				// add or merge other mixin config
-				def newMixinConfig = mixinConfigs.merge(otherMixinName, otherMixinConfig, (mixinName, mixinConfig) -> {
-					mergeInto(mixinConfig, otherMixinConfig, true)
-					return mixinConfig
+				def newMixinConfig = this.mixinConfigs.merge(otherMixinName, otherMixinConfig, (currentMixin, otherMixin) -> {
+					mergeInto(currentMixin, otherMixin, true)
+					return currentMixin
 				})
 
 				// update jar contents
@@ -130,7 +130,7 @@ class Glue {
 
 	private boolean valuesChanged(Object key, Object v1, Object v2) {
 		// ignore these as we'll merge them afterwards
-		if (key == "fabric.mod.json" || key == refmapName()) // TODO ignore mixin configs
+		if (key == "fabric.mod.json" || key == refmapName() || key.endsWith('.mixins.json'))
 			return false;
 
 		// ignore since it should never matter
