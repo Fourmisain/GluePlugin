@@ -1,22 +1,22 @@
 ## Glue
 
-Gradle plugin that helps building multi-version Fabric Minecraft mods by glueing together multiple builds.
+Gradle plugin that helps build multi-version Fabric Minecraft mods by glueing together multiple builds.
 
-"Glueing" means combining the jars, overwriting existing files - except for the `fabric.mod.json`, mixin configuration and refmap JSON files.  
-These 3 files are instead combined as a type of map/object, where existing values are overwritten.
+"Glueing" (sic) means combining the jars, overwriting existing files - except for the `fabric.mod.json`, mixin configurations and refmap JSON files.  
+These 3 types of files are instead combined as a sort of map/object, where existing entries are overwritten.
 
 ### Setup
 
 `build.gradle`:
 
-```
+```groovy
 plugins {
     id 'glue' version '0.0.5'
 }
 ```
 
 `settings.gradle`:
-```
+```groovy
 pluginManagement {
     repositories {
         maven {
@@ -30,13 +30,18 @@ pluginManagement {
 ### Configuring
 
 `build.gradle` example:
-```
+```groovy
 glue {
     // subproject names in the order they'll be glued
     targets = ['legacy', 'main', 'glue']
 
-    // output path is 'build/libs', default output file name is "${archives_base_name}-${mod_version}"
+    // output path is 'build/libs', default output file name is "${project.archives_base_name}-${project.mod_version}"
     outputName = "${project.archives_base_name}-${project.mod_version}-universal"
+
+    // input path is "${target}/build/libs", default input file name is "${subproject.archives_base_name}-${subproject.mod_version}"
+    inputNames = [
+        legacy: 'testName'  // overrides the default name for the 'legacy' target
+    ]
 }
 ```
 

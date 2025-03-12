@@ -11,41 +11,54 @@ import java.util.zip.ZipOutputStream
 class Glue {
 	class ModData {
 		Map<String, byte[]> jar = [:]
-		Map<String, Object> modJson = [:]
-		Map<String, Object> refmap = [:]
+		String jarName
+		Map<String, Map<String, Object>> modJsons = [:]
 		Map<String, Map<String, Object>> mixinConfigs = [:]
+		Map<String, Map<String, Object>> refmaps = [:]
 
 		protected ModData() {}
-		protected ModData(String subproject) {
-			if (subproject) {
-				this.jar = readJarMap(inputFile(subproject))
-				this.modJson = Glue.fromJson(jar.get("fabric.mod.json"))
-				this.refmap  = Glue.fromJson(jar.get(refmapName()))
+		protected ModData(File jarFile) {
+			if (jarFile) {
+				this.jar = readJarMap(jarFile)
+				this.jarName = jarFile.name
 
-				for (String mixinName : this.modJson.get('mixins') ?: []) {
-					this.mixinConfigs.put(mixinName, Glue.fromJson(jar.get(mixinName)))
+				this.modJsons = [
+					'fabric.mod.json': Glue.fromJson(jar.get("fabric.mod.json"))
+				]
+
+				this.modJsons.values().each { modJson ->
+					// read mixin config from mod json
+					modJson.get('mixins').each { mixinName ->
+						def mixinConfig = Glue.fromJson(jar.get(mixinName))
+						this.mixinConfigs.put(mixinName, mixinConfig)
+
+						// read refmap from mixin config
+						def refmapName = mixinConfig.get('refmap')
+						if (refmapName) {
+							this.refmaps.putIfAbsent(refmapName, Glue.fromJson(jar.get(refmapName)))
+						}
+					}
 				}
 			}
 		}
 
 		void merge(ModData other) {
-			mergeInto(this.jar, other.jar, true)
-			mergeInto(this.modJson, other.modJson, true)
-			mergeInto(this.refmap, other.refmap, true)
+			mergeInto(this.jar, other.jar, this.jarName)
+			mergeEachInto(this.modJsons, other.modJsons)
+			mergeEachInto(this.mixinConfigs, other.mixinConfigs)
+			mergeEachInto(this.refmaps, other.refmaps)
+		}
 
-			// update jar contents
-			this.jar.put("fabric.mod.json", Glue.toJson(this.modJson))
-			this.jar.put(refmapName(), Glue.toJson(this.refmap))
-
-			other.mixinConfigs.each { otherMixinName, otherMixinConfig -> {
-				// add or merge other mixin config
-				def newMixinConfig = this.mixinConfigs.merge(otherMixinName, otherMixinConfig, (currentMixin, otherMixin) -> {
-					mergeInto(currentMixin, otherMixin, true)
-					return currentMixin
-				})
+		private void mergeEachInto(Map<String, Map<String, Object>> thisMap, Map<String, Map<String, Object>> otherMap) {
+			otherMap.each { otherKey, otherValue ->  {
+				// add or merge other
+				def newValue = thisMap.merge(otherKey, otherValue) { leftValue, rightValue ->
+					mergeInto(leftValue, rightValue, otherKey)
+					return leftValue
+				}
 
 				// update jar contents
-				this.jar.put(otherMixinName, Glue.toJson(newMixinConfig))
+				this.jar.put(otherKey, Glue.toJson(newValue))
 			}}
 		}
 	}
@@ -58,34 +71,27 @@ class Glue {
 
 	private static Map<Project, Glue> INSTANCES = [:]
 	private Project project
-	private GluePluginExtension extension
 
-	private Glue(Project project, GluePluginExtension extension) {
+	private Glue(Project project) {
 		this.project = project
-		this.extension = extension
-		INSTANCES.put(project, this)
-	}
-
-	static void init(Project project, GluePluginExtension extension) {
-		INSTANCES.put(project, new Glue(project, extension))
 	}
 
 	static Glue of(Project project) {
-		return INSTANCES.get(project)
+		return INSTANCES.computeIfAbsent(project, p -> new Glue(project))
 	}
 
 	ModData createModData() {
 		return new ModData()
 	}
 
-	ModData readModData(String subproject) {
-		return new ModData(subproject);
+	ModData readModData(File jarFile) {
+		return new ModData(jarFile);
 	}
 
-	void writeModJar(Map<String, byte[]> jar) {
-		outputPath().mkdirs()
+	static void writeModJar(File jarPath, Map<String, byte[]> jar) {
+		jarPath.parentFile.mkdirs()
 
-		try (def out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outputFile())))) {
+		try (def out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(jarPath)))) {
 			for (entry in jar.entrySet()) {
 				def path = entry.key
 				def bytes = entry.value
@@ -111,29 +117,13 @@ class Glue {
 		return jarMap
 	}
 
-	// TODO shouldn't be hardcoded
-	File inputFile(String subprojectName) {
-		return project.file("${subprojectName}/build/libs/${project.archives_base_name}-${project.mod_version}.jar")
-	}
-
-	String refmapName() {
-		return project.archives_base_name + '-refmap.json'
-	}
-
-	File outputPath() {
-		return project.file('build/libs')
-	}
-
-	File outputFile() {
-		return new File(outputPath(), (extension.outputName ?: "${project.archives_base_name}-${project.mod_version}") + ".jar")
-	}
-
-	private boolean valuesChanged(Object key, Object v1, Object v2) {
+	// only used for logging purposes
+	static private boolean valuesChanged(Object key, Object v1, Object v2) {
 		// ignore these as we'll merge them afterwards
-		if (key == "fabric.mod.json" || key == refmapName() || key.endsWith('.mixins.json'))
+		if (key.endsWith(".mod.json") || key.endsWith('-refmap.json') || key.endsWith('.mixins.json'))
 			return false;
 
-		// ignore since it should never matter
+		// ignore since it shouldn't matter
 		if (key == "META-INF/MANIFEST.MF")
 			return false;
 
@@ -143,7 +133,7 @@ class Glue {
 		return v1 != v2;
 	}
 
-	void mergeInto(Map target, Map source, boolean logging = false) {
+	static void mergeInto(Map target, Map source, String loggedFile = null) {
 		source.forEach((k, v) -> {
 			def exist = target.get(k)
 
@@ -154,7 +144,7 @@ class Glue {
 				if (!exist instanceof Map) throw new Error("mismatched types, new: ${v}, old: ${exist}")
 
 				target.putIfAbsent(k, [:])
-				mergeInto(exist, v, logging)
+				mergeInto(exist, v, loggedFile)
 			} else if (v instanceof List) {
 				// merge lists (without duplicates)
 				if (!exist instanceof List) throw new Error("mismatched types, new: ${v}, old: ${exist}")
@@ -162,10 +152,10 @@ class Glue {
 				target.put(k, (exist as Set + v as Set) as List)
 			} else {
 				// overwrite value
-				if (logging && valuesChanged(k, v, exist)) {
-					print "overwriting value for ${k}"
+				if (loggedFile && valuesChanged(k, v, exist)) {
+					print "${loggedFile}: \"${k}\": "
 					if (v instanceof String && exist instanceof String)
-						print ", from ${exist} to ${v}"
+						print "${exist} -> ${v}"
 					println()
 				}
 

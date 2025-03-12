@@ -8,6 +8,17 @@ class GluePlugin implements Plugin<Project> {
 	void apply(Project project) {
 		def extension = project.extensions.create('glue', GluePluginExtension)
 
+		def inputFile = { String target ->
+			def subproject = project.project(":$target")
+			def name = extension.inputNames.get(target, "${subproject.archives_base_name}-${subproject.mod_version}" as String)
+			project.file("${target}/build/libs/${name}.jar")
+		}
+
+		def outputFile = {
+			def name = extension.outputName ?: "${project.archives_base_name}-${project.mod_version}"
+			project.file("build/libs/${name}.jar")
+		}
+
 		project.tasks.register('glue') {
 			group = 'build'
 			description = 'Glues together all projects into one fat mod jar.'
@@ -20,27 +31,32 @@ class GluePlugin implements Plugin<Project> {
 				!project.tasks.findByName('build')?.state?.failure
 			}
 
-			// TODO https://docs.gradle.org/current/userguide/more_about_tasks.html
-			doNotTrackState("can't be botherered right now")
+			// define inputs/outputs
+			for (target in extension.targets) {
+				inputs.file(inputFile(target))
+			}
+			outputs.file(outputFile())
 
 			doLast {
 				Glue glue = Glue.of(project)
 
-				def mergedData = glue.createModData()
-				extension.targets.each {
-					mergedData.merge(glue.readModData(it))
+				def inputs = it.inputs.files.files
+				def output = it.outputs.files.singleFile
+
+				def modData = glue.createModData()
+				inputs.each {
+					println "glueing ${project.file('.').relativePath(it)}"
+					modData.merge(glue.readModData(it))
 				}
-				glue.writeModJar(mergedData.jar)
+
+				println "writing ${project.file('.').relativePath(output)}"
+				Glue.writeModJar(output, modData.jar)
 			}
 		}
 
-		Glue.init(project, extension)
+		// add to clean up task / register clean task
+		def clean = { delete outputFile() }
 
-		def clean = {
-			delete Glue.of(project).outputFile()
-		}
-
-		// add to clean up task (or register new task)
 		var cleanTask = project.tasks.findByPath('clean')
 		if (!cleanTask) {
 			project.tasks.register('clean', Delete) {
@@ -52,7 +68,7 @@ class GluePlugin implements Plugin<Project> {
 			cleanTask.doFirst clean
 		}
 
-		// automatically glue after building
+		// automatically glue after building / register build task
 		var buildTask = project.tasks.findByPath('build')
 		if (!buildTask) {
 			project.tasks.register('build') {
@@ -61,7 +77,7 @@ class GluePlugin implements Plugin<Project> {
 				finalizedBy 'glue'
 			}
 		} else {
-			buildTask.finalizedBy('glue')
+			buildTask.finalizedBy 'glue'
 		}
 	}
 }
