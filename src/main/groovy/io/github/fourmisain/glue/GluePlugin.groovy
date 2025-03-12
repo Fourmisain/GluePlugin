@@ -9,8 +9,8 @@ class GluePlugin implements Plugin<Project> {
 		GluePluginExtension extension
 
 		def glueTask = project.task('glue') {
-			group 'build'
-			description 'Glues together all projects into one fat mod jar.'
+			group = 'build'
+			description = 'Glues together all projects into one fat mod jar.'
 			onlyIf {
 				!project.tasks.findByName('build')?.state?.failure
 			}
