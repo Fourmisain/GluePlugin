@@ -11,8 +11,8 @@ dependencies {
 	implementation 'com.google.code.gson:gson:2.12.1'
 }
 
-group 'io.github.fourmisain'
-version '0.0.5'
+group = 'io.github.fourmisain'
+version = '0.0.5'
 
 gradlePlugin {
 	plugins {
@@ -27,7 +27,7 @@ publishing {
 	repositories {
 		if (project.properties.containsKey('gitLabDeployToken')) {
 			maven {
-				url "https://gitlab.com/api/v4/projects/37712942/packages/maven"
+				url = "https://gitlab.com/api/v4/projects/37712942/packages/maven"
 				credentials(HttpHeaderCredentials) {
 					name = 'Deploy-Token'
 					value = gitLabDeployToken

@@ -6,11 +6,16 @@ import org.gradle.api.tasks.Delete
 
 class GluePlugin implements Plugin<Project> {
 	void apply(Project project) {
-		GluePluginExtension extension
+		def extension = project.extensions.create('glue', GluePluginExtension)
 
-		def glueTask = project.task('glue') {
+		project.tasks.register('glue') {
 			group = 'build'
 			description = 'Glues together all projects into one fat mod jar.'
+
+			dependsOn extension.targets.collect {
+				":${it}:build"
+			}
+
 			onlyIf {
 				!project.tasks.findByName('build')?.state?.failure
 			}
@@ -29,31 +34,34 @@ class GluePlugin implements Plugin<Project> {
 			}
 		}
 
-		extension = project.extensions.create('glue', GluePluginExtension, glueTask)
 		Glue.init(project, extension)
 
-		// get/create clean task
-		var cleanTask = project.tasks.findByPath('clean')
-		if (!cleanTask) {
-			cleanTask = project.tasks.create('clean', Delete) {
-				group 'build'
-			}
-		}
-
-		// define cleanup
-		cleanTask.doFirst {
+		def clean = {
 			delete Glue.of(project).outputFile()
 		}
 
-		// get/create build task
-		var buildTask = project.tasks.findByPath('build')
-		if (!buildTask) {
-			buildTask = project.tasks.create('build') {
-				group 'build'
+		// add to clean up task (or register new task)
+		var cleanTask = project.tasks.findByPath('clean')
+		if (!cleanTask) {
+			project.tasks.register('clean', Delete) {
+				group = 'build'
+
+				doFirst clean
 			}
+		} else {
+			cleanTask.doFirst clean
 		}
 
-		// glue after building
-		buildTask.finalizedBy('glue')
+		// automatically glue after building
+		var buildTask = project.tasks.findByPath('build')
+		if (!buildTask) {
+			project.tasks.register('build') {
+				group = 'build'
+
+				finalizedBy 'glue'
+			}
+		} else {
+			buildTask.finalizedBy('glue')
+		}
 	}
 }
