@@ -2,10 +2,11 @@ package io.github.fourmisain.glue
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.tasks.Delete
 
 class GluePlugin implements Plugin<Project> {
 	void apply(Project project) {
+		project.plugins.apply 'base'
+
 		def extension = project.extensions.create('glue', GluePluginExtension)
 
 		def inputFile = { String target ->
@@ -54,30 +55,16 @@ class GluePlugin implements Plugin<Project> {
 			}
 		}
 
-		// add to clean up task / register clean task
-		def clean = { delete outputFile() }
-
-		var cleanTask = project.tasks.findByPath('clean')
-		if (!cleanTask) {
-			project.tasks.register('clean', Delete) {
-				group = 'build'
-
-				doFirst clean
+		// add to clean up task
+		project.tasks.named('clean') {
+			doFirst {
+				delete outputFile()
 			}
-		} else {
-			cleanTask.doFirst clean
 		}
 
-		// automatically glue after building / register build task
-		var buildTask = project.tasks.findByPath('build')
-		if (!buildTask) {
-			project.tasks.register('build') {
-				group = 'build'
-
-				finalizedBy 'glue'
-			}
-		} else {
-			buildTask.finalizedBy 'glue'
+		// automatically glue after building
+		project.tasks.named('build') {
+			finalizedBy 'glue'
 		}
 	}
 }
