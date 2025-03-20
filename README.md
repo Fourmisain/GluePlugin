@@ -11,7 +11,7 @@ These 3 types of files are instead combined as a sort of map/object, where exist
 
 ```groovy
 plugins {
-    id 'glue' version '0.0.6'
+    id 'glue' version '0.0.7'
 }
 ```
 

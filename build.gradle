@@ -12,7 +12,7 @@ dependencies {
 }
 
 group = 'io.github.fourmisain'
-version = '0.0.6'
+version = '0.0.7'
 
 gradlePlugin {
 	plugins {
