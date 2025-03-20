@@ -3,7 +3,7 @@
 Gradle plugin that helps build multi-version Fabric Minecraft mods by glueing together multiple builds.
 
 "Glueing" (sic) means combining the jars, overwriting existing files - except for the `fabric.mod.json`, mixin configurations and refmap JSON files.  
-These 3 types of files are instead combined as a sort of map/object, where existing entries are overwritten.
+These 3 types of files are instead combined as a sort of map/object, where existing entries are overwritten or combined if they are objects or lists.
 
 ### Setup
 
@@ -35,13 +35,27 @@ glue {
     // subproject names in the order they'll be glued
     targets = ['legacy', 'main', 'glue']
 
-    // output path is 'build/libs', default output file name is "${project.archives_base_name}-${project.mod_version}"
+    // the output file name (without ".jar"), defaults to "${project.archives_base_name}-${project.mod_version}"
+    // note: the output path is "build/libs"
     outputName = "${project.archives_base_name}-${project.mod_version}-universal"
 
-    // input path is "${target}/build/libs", default input file name is "${subproject.archives_base_name}-${subproject.mod_version}"
+    // the input file name (without ".jar") for each target, defaults to "${subproject.archives_base_name}-${subproject.mod_version}"
+    // note: the input path is "${target}/build/libs"
     inputNames = [
-        legacy: 'testName'  // overrides the default name for the 'legacy' target
+        legacy: 'testName'  // overrides the input filename for the 'legacy' target
     ]
+
+    // overrides allow you to change or remove top-level entries in the 3 types of JSON files
+    overrides = [
+        'fabric.mod.json': [
+            'mixins': null
+        ]
+    ]
+
+    // there's also more general JSON file transforms if needed (note: this disables task caching)
+    transform('fabric.mod.json') {
+        it['authors'] += 'Glue'
+    }
 }
 ```
 

@@ -37,6 +37,11 @@ class GluePlugin implements Plugin<Project> {
 				inputs.file(inputFile(target))
 			}
 			outputs.file(outputFile())
+			inputs.property('overrides', extension.overrides)
+
+			if (extension.transforms) {
+				doNotTrackState('no reliable way of tracking arbitrary functions/lambdas/closures')
+			}
 
 			doLast {
 				Glue glue = Glue.of(project)
@@ -49,6 +54,8 @@ class GluePlugin implements Plugin<Project> {
 					println "glueing ${project.file('.').relativePath(it)}"
 					modData.merge(glue.readModData(it))
 				}
+				modData.override(extension.overrides)
+				modData.transform(extension.transforms)
 
 				println "writing ${project.file('.').relativePath(output)}"
 				Glue.writeModJar(output, modData.jar)
