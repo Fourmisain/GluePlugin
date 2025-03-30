@@ -72,15 +72,25 @@ class Glue {
 		}
 
 		void override(Map<String, Map<String, Object>> overrides) {
-			overrideEach(this.modJsons, overrides)
-			overrideEach(this.mixinConfigs, overrides)
-			overrideEach(this.refmaps, overrides)
+			Set<String> handled = []
+
+			handled += overrideEach(this.modJsons, overrides)
+			handled += overrideEach(this.mixinConfigs, overrides)
+			handled += overrideEach(this.refmaps, overrides)
+
+			def unhandled = overrides.keySet() - handled
+			if (unhandled) {
+				throw new Error("overrides contains references to non-existent files: " + unhandled)
+			}
 		}
 
-		private overrideEach(Map<String, Map<String, Object>> files, Map<String, Map<String, Object>> overrides) {
+		private Set<String> overrideEach(Map<String, Map<String, Object>> files, Map<String, Map<String, Object>> overrides) {
+			Set<String> found = []
+
 			overrides.each { file, override ->
 				def value = files.get(file)
 				if (value != null) {
+					found += file
 					println "overriding contents of $file:"
 
 					override.each { key, newEntry ->
@@ -106,19 +116,30 @@ class Glue {
 					this.jar.put(file, Glue.toJson(value))
 				}
 			}
+
+			return found
 		}
 
 		void transform(Map<String, Action<Map<String, Object>>> transforms) {
-			transformEach(this.modJsons, transforms)
-			transformEach(this.mixinConfigs, transforms)
-			transformEach(this.refmaps, transforms)
+			Set<String> handled = []
+
+			handled += transformEach(this.modJsons, transforms)
+			handled += transformEach(this.mixinConfigs, transforms)
+			handled += transformEach(this.refmaps, transforms)
+
+			def unhandled = transforms.keySet() - handled
+			if (unhandled) {
+				throw new Error("transforms contains references to non-existent files: " + unhandled)
+			}
 		}
 
 		private transformEach(Map<String, Map<String, Object>> files, Map<String, Action<Map<String, Object>>> transforms) {
-			transforms.each { file, transform ->
+			Set<String> found = []
 
+			transforms.each { file, transform ->
 				def value = files.get(file)
 				if (value != null) {
+					found += file
 					println "transforming file $file"
 
 					transform.execute(value)
@@ -127,6 +148,8 @@ class Glue {
 					this.jar.put(file, Glue.toJson(value))
 				}
 			}
+
+			return found
 		}
 	}
 
